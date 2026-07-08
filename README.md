@@ -5,7 +5,7 @@
 ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)
 ![MIT](https://img.shields.io/badge/license-MIT-green)
 
-A [MyThingsLab](../mythings-core) `My[X]` tool: keeps
+A [MyThingsLab](../my-things-core) `My[X]` tool: keeps
 `MyThingsLab/mythingslab.github.io` — the fleet's technical-docs site — in
 sync with the fleet itself. One docs page per `My[X]` tool, refreshed from
 that tool's `README.md` + `CLAUDE.md` whenever they change.
@@ -46,7 +46,7 @@ tool's page) against the docs site.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -e ../mythings-core -e ../my-guard -e ".[dev]"
+pip install -e ../my-things-core -e ../my-guard -e ".[dev]"
 pytest
 ```
 
