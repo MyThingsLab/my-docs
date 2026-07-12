@@ -100,7 +100,16 @@ class DocSync:
         branch = f"{LABEL}/sync"
         existing = self._existing_pr(branch)
         with Workspace(self.repo_root, self.base) as tree:
-            self._git(tree, ["checkout", "-B", branch])
+            if existing is None:
+                self._git(tree, ["checkout", "-B", branch])
+            else:
+                # Build on top of the branch an already-open PR tracks,
+                # rather than resetting to base -- a reset-and-recommit
+                # would diverge from what's on the remote and force-push is
+                # a hard DENY (myguard's no_force_push rule), so a plain
+                # push must stay a fast-forward.
+                self._git(tree, ["fetch", "origin", branch])
+                self._git(tree, ["checkout", "-B", branch, f"origin/{branch}"])
             for docs, page in pages.values():
                 target = tree / page.path
                 target.parent.mkdir(parents=True, exist_ok=True)
