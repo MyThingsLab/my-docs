@@ -4,7 +4,7 @@ from pathlib import Path
 
 from mythings.ledger import Ledger
 
-from conftest import FakeRunner, ScriptedEngine, SpyEngine, branch_file, make_docs_site
+from conftest import ScriptedEngine, branch_file, fake_gh, make_docs_site
 from mydocs.docsync import DocSync
 
 _CHANGED_README = "# my-guard\n\nThe policy/rule engine.\n"
@@ -18,8 +18,8 @@ _PAGE_REPLY = (
 )
 
 
-def _runner(**kw) -> FakeRunner:
-    return FakeRunner(
+def _runner(**kw) -> fake_gh:
+    return fake_gh(
         org_repos=["my-guard", "my-reporter", "mythingslab.github.io"],
         files={
             "MyThingsLab/my-guard": {"README.md": _CHANGED_README, "CLAUDE.md": _CHANGED_CLAUDE},
@@ -110,7 +110,7 @@ def test_sync_nothing_stale_makes_no_engine_call_and_no_pr(tmp_path: Path) -> No
         claude_md_hash=docs.claude_md_hash,
         pr_url="https://github.com/MyThingsLab/mythingslab.github.io/pull/3",
     )
-    spy = SpyEngine()
+    spy = ScriptedEngine("")
     docsync = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
                        ledger=ledger, runner=fake, engine=spy)
 

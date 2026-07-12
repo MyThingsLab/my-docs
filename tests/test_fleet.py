@@ -4,12 +4,12 @@ from pathlib import Path
 
 from mythings.ledger import Ledger
 
-from conftest import FakeRunner
+from conftest import fake_gh
 from mydocs.fleet import ToolDocs, ToolRepo, candidate_tools, is_stale, stale_tools
 
 
 def test_candidate_tools_excludes_docs_site_and_repos_without_claude_md() -> None:
-    fake = FakeRunner(
+    fake = fake_gh(
         org_repos=["my-guard", "no-claude-md-repo", "mythingslab.github.io"],
         files={
             "MyThingsLab/my-guard": {"README.md": "# my-guard\n", "CLAUDE.md": "# guard\n"},
@@ -23,7 +23,7 @@ def test_candidate_tools_excludes_docs_site_and_repos_without_claude_md() -> Non
 
 
 def test_candidate_tools_respects_explicit_repos_list() -> None:
-    fake = FakeRunner(
+    fake = fake_gh(
         files={
             "MyThingsLab/my-guard": {"README.md": "# my-guard\n", "CLAUDE.md": "# guard\n"},
             "MyThingsLab/my-reporter": {"README.md": "# my-reporter\n", "CLAUDE.md": "# rep\n"},
