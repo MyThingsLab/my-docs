@@ -5,7 +5,15 @@ from pathlib import Path
 from mythings.ledger import Ledger
 
 from conftest import fake_gh
-from mydocs.fleet import ToolDocs, ToolRepo, candidate_tools, is_stale, stale_tools
+from mydocs.fleet import (
+    ToolDocs,
+    ToolRepo,
+    _decode_b64,
+    candidate_tools,
+    is_stale,
+    last_sync_hashes,
+    stale_tools,
+)
 
 
 def test_candidate_tools_excludes_docs_site_and_repos_without_claude_md() -> None:
@@ -92,3 +100,22 @@ def test_stale_tools_filters_to_changed_only(tmp_path: Path) -> None:
     )
 
     assert [d.repo.name for d in result] == ["my-guard"]
+
+
+def test_decode_b64_returns_empty_string_for_missing_content() -> None:
+    assert _decode_b64(None) == ""
+    assert _decode_b64("") == ""
+
+
+def test_last_sync_hashes_none_when_prior_entry_is_missing_a_hash(tmp_path: Path) -> None:
+    ledger = Ledger(tmp_path / "ledger.jsonl")
+    ledger.record(
+        tool="mydocs",
+        kind="docs_sync",
+        outcome="success",
+        repo="MyThingsLab/my-guard",
+        readme_hash="deadbeef",
+        # claude_md_hash intentionally omitted -- a malformed/partial prior record
+    )
+
+    assert last_sync_hashes(ledger, "my-guard") is None

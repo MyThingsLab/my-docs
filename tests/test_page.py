@@ -45,3 +45,28 @@ def test_render_page_degrades_on_unparseable_reply() -> None:
 
     assert page.degraded is True
     assert "The policy/rule engine." in page.content
+
+
+def test_render_page_strips_fenced_code_block_around_json() -> None:
+    reply = (
+        "```json\n"
+        '{"page": {"path": "_tools/my-guard.md", '
+        '"content": "---\\ntitle: my-guard\\n---\\n\\nEnforces policy.\\n"}}\n'
+        "```"
+    )
+    engine = ScriptedEngine(reply)
+
+    page = render_page(engine, _docs(), style_anchor="")
+
+    assert page.degraded is False
+    assert "Enforces policy." in page.content
+
+
+def test_render_page_degrades_on_empty_content_in_reply() -> None:
+    reply = '{"page": {"path": "_tools/my-guard.md", "content": "   "}}'
+    engine = ScriptedEngine(reply)
+
+    page = render_page(engine, _docs(), style_anchor="")
+
+    assert page.degraded is True
+    assert "The policy/rule engine." in page.content

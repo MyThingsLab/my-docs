@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from mythings.ledger import Ledger
+from mythings.policy import Action, Decision, PolicyResult
 
 from conftest import ScriptedEngine, branch_file, fake_gh, make_docs_site
 from mydocs.docsync import DocSync
@@ -137,6 +139,49 @@ def test_sync_noop_engine_degrades_to_readme_verbatim(tmp_path: Path) -> None:
     assert "title: my-guard" in committed
 
 
+def test_sync_updates_already_open_pr_branch_without_non_fast_forward_error(
+    tmp_path: Path,
+) -> None:
+    # Regression test for #7: the sync branch is regenerated from base on
+    # every run, so pushing again while a PR from a prior run is still open
+    # must force-push -- a plain push is rejected as non-fast-forward.
+    site = make_docs_site(tmp_path)
+    ledger = _synced_ledger(tmp_path)
+
+    fake1 = _runner()
+    engine1 = ScriptedEngine(_PAGE_REPLY)
+    docsync1 = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
+                        ledger=ledger, runner=fake1, engine=engine1)
+    result1 = docsync1.sync(repos=["my-guard", "my-reporter"])
+    assert result1.outcome == "success"
+    assert result1.pr == 7
+
+    changed_again_reply = (
+        '{"page": {"path": "_tools/my-guard.md", '
+        '"content": "---\\ntitle: my-guard\\n---\\n\\nEnforces policy, v2.\\n"}}'
+    )
+    fake2 = fake_gh(
+        org_repos=["my-guard", "my-reporter", "mythingslab.github.io"],
+        files={
+            "MyThingsLab/my-guard": {
+                "README.md": "# my-guard\n\nThe policy/rule engine, v2.\n",
+                "CLAUDE.md": _CHANGED_CLAUDE,
+            },
+        },
+        existing_pr={"number": 7, "url": "https://github.com/MyThingsLab/mythingslab.github.io/pull/7"},
+    )
+    engine2 = ScriptedEngine(changed_again_reply)
+    docsync2 = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
+                        ledger=ledger, runner=fake2, engine=engine2)
+
+    result2 = docsync2.sync(repos=["my-guard"])
+
+    assert result2.outcome == "success"
+    assert result2.pr == 7
+    committed = branch_file(site, "my-docs/sync", "_tools/my-guard.md")
+    assert "Enforces policy, v2." in committed
+
+
 def test_sync_no_pr_skips_opening_pr(tmp_path: Path) -> None:
     site = make_docs_site(tmp_path)
     fake = _runner()
@@ -150,3 +195,59 @@ def test_sync_no_pr_skips_opening_pr(tmp_path: Path) -> None:
     assert result.outcome == "success"
     assert result.pr is None
     assert not any(c[:2] == ["pr", "create"] for c in fake.calls)
+
+
+class _DenyPolicy:
+    def evaluate(self, action: Action) -> PolicyResult:
+        return PolicyResult(Decision.DENY, reason="blocked for test", rule="test_deny")
+
+
+def test_sync_records_failure_when_policy_denies_the_pr(tmp_path: Path) -> None:
+    site = make_docs_site(tmp_path)
+    fake = _runner()
+    ledger = _synced_ledger(tmp_path)
+    engine = ScriptedEngine(_PAGE_REPLY)
+    docsync = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
+                       ledger=ledger, runner=fake, engine=engine, policy=_DenyPolicy())
+
+    result = docsync.sync(repos=["my-guard", "my-reporter"])
+
+    assert result.outcome == "failure"
+    assert result.pr is None
+    assert "policy blocked" in result.detail
+    failures = [e for e in ledger if e.outcome == "failure"]
+    assert len(failures) == 1
+    assert failures[0].detail == result.detail
+
+
+def test_style_anchor_returns_decoded_existing_page(tmp_path: Path) -> None:
+    site = make_docs_site(tmp_path)
+    anchor_content = "---\ntitle: my-researcher\n---\n\nExisting page.\n"
+    fake = fake_gh(
+        org_repos=["my-guard", "mythingslab.github.io"],
+        files={
+            "MyThingsLab/my-guard": {"README.md": _CHANGED_README, "CLAUDE.md": _CHANGED_CLAUDE},
+            "MyThingsLab/mythingslab.github.io": {
+                "_tools/my-researcher.md": anchor_content,
+            },
+        },
+    )
+    ledger = _synced_ledger(tmp_path)
+    docsync = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
+                       ledger=ledger, runner=fake)
+
+    anchor = docsync._style_anchor()
+
+    assert anchor == anchor_content
+
+
+def test_git_failure_raises_runtime_error_with_stderr(tmp_path: Path) -> None:
+    site = make_docs_site(tmp_path)
+    fake = _runner()
+    ledger = _synced_ledger(tmp_path)
+    engine = ScriptedEngine(_PAGE_REPLY)
+    docsync = DocSync(repo_root=site, repo="MyThingsLab/mythingslab.github.io",
+                       ledger=ledger, runner=fake, engine=engine)
+
+    with pytest.raises(RuntimeError, match="git bogus-not-a-command failed"):
+        docsync._git(site, ["bogus-not-a-command"])
